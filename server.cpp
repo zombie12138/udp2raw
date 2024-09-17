@@ -635,7 +635,6 @@ int server_event_loop() {
             mylog(log_info, "we are running at lower-level (auto) mode\n");
         }
     }
-
     if (raw_mode == mode_faketcp) {
         bind_fd = socket(local_addr.get_type(), SOCK_STREAM, 0);
     } else if (raw_mode == mode_udp || raw_mode == mode_icmp)  // bind an adress to avoid collision,for icmp,there is no port,just bind a udp port

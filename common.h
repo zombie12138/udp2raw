@@ -27,6 +27,10 @@
 #include <assert.h>
 #include <pthread.h>
 
+#include <netdb.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
 #ifndef USE_LIBNET
 #define NO_LIBNET
 #endif
@@ -86,6 +90,8 @@ typedef int socklen_t;
 #include <map>
 #include <set>
 #include <list>
+#include <memory>
+
 using namespace std;
 
 #if defined(__BYTE_ORDER) && __BYTE_ORDER == __BIG_ENDIAN ||             \
@@ -178,8 +184,14 @@ typedef u64_t fd64_t;
 u32_t djb2(unsigned char *str, int len);
 u32_t sdbm(unsigned char *str, int len);
 
-struct address_t  // TODO scope id
-{
+struct address_t {
+    // TODO scope id
+
+    // domain name resolution retry times
+    static const int retry = 5;
+    // every 60 000 ms == 1h
+    static const int domain_name_refesh = 60000;
+
     struct hash_function {
         u32_t operator()(const address_t &key) const {
             return sdbm((unsigned char *)&key.inner, sizeof(key.inner));
@@ -192,12 +204,21 @@ struct address_t  // TODO scope id
         sockaddr_in6 ipv6;
     };
     storage_t inner;
+    std::shared_ptr<char[]> domain_name;
+    my_time_t prev_dns_query;
 
-    address_t() {
+    address_t() : domain_name(nullptr), prev_dns_query(0) {
         clear();
     }
+    address_t(const address_t& other) : 
+            inner(other.inner), 
+            domain_name(other.domain_name), 
+            prev_dns_query(other.prev_dns_query) {
+    }
+
     void clear() {
         memset(&inner, 0, sizeof(inner));
+        domain_name.reset();
     }
     int from_ip_port(u32_t ip, int port) {
         clear();
@@ -284,6 +305,8 @@ struct address_t  // TODO scope id
 
     int new_connected_udp_fd();
 
+    bool resolve_domain_name();
+
     char *get_ip();
 };
 
@@ -291,8 +314,8 @@ namespace std {
 template <>
 struct hash<address_t> {
     std::size_t operator()(const address_t &key) const {
-        // return address_t::hash_function(k);
-        return sdbm((unsigned char *)&key.inner, sizeof(key.inner));
+        return address_t::hash_function()(key);
+        // return sdbm((unsigned char *)&key.inner, sizeof(key.inner));
     }
 };
 }  // namespace std

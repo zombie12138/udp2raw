@@ -215,12 +215,15 @@ struct blob_t : not_copy_able_t  // used in conn_info_t.
 
     anti_replay_t anti_replay;  // anti_replay_t is here bc its huge,its allocation is delayed.
 };
-struct conn_info_t  // stores info for a raw connection.for client ,there is only one connection,for server there can be thousand of connection since server can
-// handle multiple clients
-{
-    current_state_t state;
 
+// stores info for a raw connection.for client, there is only one connection;
+// for server there can be thousand of connection, 
+//     since server can handle multiple clients
+struct conn_info_t  {
+    // raw connection info
     raw_info_t raw_info;
+
+    current_state_t state;
     u64_t last_state_time;
     u64_t last_hb_sent_time;  // client re-use this for retry
     u64_t last_hb_recv_time;
@@ -240,21 +243,16 @@ struct conn_info_t  // stores info for a raw connection.for client ,there is onl
     uint8_t oppsite_roller;
     u64_t last_oppsite_roller_time;
 
-    //	ip_port_t ip_port;
-
-    /*
-            const uint32_t &ip=raw_info.recv_info.src_ip;
-            const uint16_t &port=raw_info.recv_info.src_port;
-
-    */
-    void recover(const conn_info_t &conn_info);
-    void re_init();
-    conn_info_t();
-    void prepare();
     conn_info_t(const conn_info_t &b);
     conn_info_t &operator=(const conn_info_t &b);
     ~conn_info_t();
-};  // g_conn_info;
+    void recover(const conn_info_t &conn_info);
+    void re_init();
+    conn_info_t();
+
+    // check running mode (client/server), and register server clear function
+    void prepare();
+};
 
 struct conn_manager_t  // manager for connections. for client,we dont need conn_manager since there is only one connection.for server we use one conn_manager for all connections
 {

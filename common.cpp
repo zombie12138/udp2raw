@@ -53,22 +53,32 @@ int address_t::from_str(char *str) {
         {
             // okay
         } else {
-            mylog(log_error, "ip_addr %s is invalid, %d\n", ip_addr_str, ret);
+            mylog(log_error, "ipv6_addr %s is invalid, %d\n", ip_addr_str, ret);
             myexit(-1);
         }
     } else {
         ret = inet_pton(AF_INET, ip_addr_str, &(inner.ipv4.sin_addr));
         inner.ipv4.sin_port = htons(port);
 
-        if (ret == 0) {
-            mylog(log_error, "ip_addr %s is not an ipv4 address, %d\n", ip_addr_str, ret);
-            myexit(-1);
-        } else if (ret == 1) {
-            // okay
-        } else {
-            mylog(log_error, "ip_addr %s is invalid, %d\n", ip_addr_str, ret);
-            myexit(-1);
+        if (ret != 1) {
+            // dns?
+            size_t length = strlen(ip_addr_str) + 1;
+            domain_name.reset(new char[length]);
+            strcpy(domain_name.get(), ip_addr_str);
+            if (!resolve_domain_name()) {
+                mylog(log_error, "Address %s is invalid, %d\n", ip_addr_str, ret);
+                myexit(-1);
+            }
         }
+        // if (ret == 0) {
+        //     mylog(log_error, "ip_addr %s is not an ipv4 address, %d\n", ip_addr_str, ret);
+        //     myexit(-1);
+        // } else if (ret == 1) {
+        //     // okay
+        // } else {
+        //     mylog(log_error, "ip_addr %s is invalid, %d\n", ip_addr_str, ret);
+        //     myexit(-1);
+        // }
     }
 
     return 0;
@@ -92,18 +102,28 @@ int address_t::from_str_ip_only(char *str) {
     } else {
         ret = inet_pton(type, str, &inner.ipv6.sin6_addr);
     }
-
-    if (ret == 0)  // 0 if address type doesnt match
-    {
-        mylog(log_error, "confusion in parsing %s, %d\n", str, ret);
-        myexit(-1);
-    } else if (ret == 1)  // inet_pton returns 1 on success
-    {
-        // okay
-    } else {
-        mylog(log_error, "ip_addr %s is invalid, %d\n", str, ret);
-        myexit(-1);
+    if (ret != 1) {
+        // dns?
+        size_t length = strlen(str) + 1;
+        domain_name.reset(new char[length]);
+        strcpy(domain_name.get(), str);
+        if (!resolve_domain_name()) {
+            mylog(log_error, "Address %s is invalid, %d\n", str, ret);
+            myexit(-1);
+        }
     }
+
+    // if (ret == 0)  // 0 if address type doesnt match
+    // {
+    //     mylog(log_error, "confusion in parsing %s, %d\n", str, ret);
+    //     myexit(-1);
+    // } else if (ret == 1)  // inet_pton returns 1 on success
+    // {
+    //     // okay
+    // } else {
+    //     mylog(log_error, "ip_addr %s is invalid, %d\n", str, ret);
+    //     myexit(-1);
+    // }
     return 0;
 }
 
@@ -112,6 +132,7 @@ char *address_t::get_str() {
     to_str(res);
     return res;
 }
+
 void address_t::to_str(char *s) {
     // static char res[max_addr_len];
     char ip_addr[max_addr_len];
@@ -192,6 +213,8 @@ int address_t::from_sockaddr(sockaddr *addr, socklen_t slen) {
 
 int address_t::new_connected_udp_fd() {
     int new_udp_fd;
+    // dns reslove for server
+    resolve_domain_name();
     new_udp_fd = socket(get_type(), SOCK_DGRAM, IPPROTO_UDP);
     if (new_udp_fd < 0) {
         mylog(log_warn, "create udp_fd error\n");
@@ -210,6 +233,49 @@ int address_t::new_connected_udp_fd() {
     }
 
     return new_udp_fd;
+}
+
+bool address_t::resolve_domain_name() {
+    if (domain_name && get_current_time() - prev_dns_query > domain_name_refesh) {
+        struct addrinfo hints, *res, *p;
+        bool ret = false;
+        memset(&hints, 0, sizeof hints);
+        hints.ai_family = AF_UNSPEC; // AF_INET or AF_INET6 to force version
+        hints.ai_socktype = SOCK_STREAM; // Type of the socket
+
+        // retry
+        for (int i = 0; i < retry; ++i) {
+            int status;
+            if ((status = getaddrinfo(domain_name.get(), NULL, &hints, &res)) != 0) {
+                mylog(log_warn, "DNS error %s\n", gai_strerror(status));
+                continue;
+            }
+            break;
+        }
+        for (p = res; p != NULL; p = p->ai_next) {
+            if (p->ai_family == AF_INET) { // IPv4
+                memcpy(&inner.ipv4.sin_addr, &((struct sockaddr_in *)p->ai_addr)->sin_addr, sizeof(in_addr));
+                inner.ipv4.sin_family = AF_INET; // Explicitly setting IPv4
+                prev_dns_query = get_current_time();
+                ret = true;
+                break;
+            } else if (p->ai_family == AF_INET6) { // IPv6
+                memcpy(&inner.ipv6.sin6_addr, &((struct sockaddr_in6 *)p->ai_addr)->sin6_addr, sizeof(in6_addr));
+                inner.ipv6.sin6_family = AF_INET6; // Explicitly setting IPv6
+                prev_dns_query = get_current_time();
+                ret = true;
+                break;
+            }
+        }
+        freeaddrinfo(res); // Free the linked list
+
+        if (!ret && prev_dns_query == 0) {
+            mylog(log_error, "All DNS requests failed.\n");
+            myexit(-2);
+        }
+        return ret;
+    }
+    return true;
 }
 
 bool my_ip_t::equal(const my_ip_t &b) const {
@@ -244,6 +310,8 @@ char *my_ip_t::get_str2() const {
 }
 
 int my_ip_t::from_address_t(address_t tmp_addr) {
+    // reslove dns for client
+    tmp_addr.resolve_domain_name();
     if (tmp_addr.get_type() == raw_ip_version && raw_ip_version == AF_INET) {
         v4 = tmp_addr.inner.ipv4.sin_addr.s_addr;
     } else if (tmp_addr.get_type() == raw_ip_version && raw_ip_version == AF_INET6) {

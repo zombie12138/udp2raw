@@ -1,5 +1,10 @@
 # Udp2raw-tunnel
 
+**This version has DNS resolution enabled by default**: 
+
+```bash
+udp2raw -c -l0.0.0.0:port -r domain_name[:port] -k password --raw-mode faketcp -a --fix-gro
+```
 
 A Tunnel which turns UDP Traffic into Encrypted FakeTCP/UDP/ICMP Traffic by using Raw Socket, helps you Bypass UDP FireWalls(or Unstable UDP Environment).
 

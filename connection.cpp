@@ -80,11 +80,11 @@ void conn_info_t::recover(const conn_info_t &conn_info) {
 }
 
 void conn_info_t::re_init() {
-    // send_packet_info.protocol=g_packet_info_send.protocol;
-    if (program_mode == server_mode)
+    if (program_mode == server_mode) {
         state.server_current_state = server_idle;
-    else
+    } else {
         state.client_current_state = client_idle;
+    }
     last_state_time = 0;
     oppsite_const_id = 0;
 
@@ -94,10 +94,12 @@ void conn_info_t::re_init() {
     oppsite_roller = 0;
     last_oppsite_roller_time = 0;
 }
+
 conn_info_t::conn_info_t() {
     blob = 0;
     re_init();
 }
+
 void conn_info_t::prepare() {
     assert(blob == 0);
     blob = new blob_t;

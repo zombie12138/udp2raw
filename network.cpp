@@ -2699,6 +2699,8 @@ int get_src_adress(u32_t &ip,u32_t remote_ip_uint32,int remote_port)  //a trick 
     return 0;
 }*/
 
+// Retrieves the source address from a newly created UDP socket. 
+// The remote_addr parameter is used only for type checking.
 int get_src_adress2(address_t &output_addr, address_t remote_addr) {
     int new_udp_fd = remote_addr.new_connected_udp_fd();
     if (new_udp_fd < 0) {
@@ -2719,6 +2721,7 @@ int get_src_adress2(address_t &output_addr, address_t remote_addr) {
 
     return 0;
 }
+
 /*
 int try_to_list_and_bind(int &fd,u32_t local_ip_uint32,int port)  //try to bind to a port,may fail.
 {

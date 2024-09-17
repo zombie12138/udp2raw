@@ -91,8 +91,8 @@ int socket_buf_size = 1024 * 1024;
 
 // char lower_level_arg[1000];
 #ifdef UDP2RAW_LINUX
-int process_lower_level_arg()  // handle --lower-level option
-{
+// handle --lower-level option
+int process_lower_level_arg() {
     lower_level = 1;
     if (strcmp(optarg, "auto") == 0) {
         return 0;

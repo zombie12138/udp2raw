@@ -19,7 +19,8 @@ extern pcap_t *pcap_handle;
 extern int pcap_captured_full_len;
 #endif
 
-int client_on_timer(conn_info_t &conn_info)  // for client. called when a timer is ready in epoll
+// for client. called when a timer is ready in epoll
+int client_on_timer(conn_info_t &conn_info)
 {
     packet_info_t &send_info = conn_info.raw_info.send_info;
     packet_info_t &recv_info = conn_info.raw_info.recv_info;
@@ -88,6 +89,7 @@ int client_on_timer(conn_info_t &conn_info)  // for client. called when a timer 
         return 0;
     }
 #endif
+    
     if (raw_info.disabled) {
         conn_info.state.client_current_state = client_idle;
         conn_info.my_id = get_true_random_number_nz();
@@ -148,6 +150,9 @@ int client_on_timer(conn_info_t &conn_info)  // for client. called when a timer 
         mylog(log_info, "using port %d\n", send_info.src_port);
         init_filter(send_info.src_port);
 
+        // update remote ip
+        send_info.new_dst_ip.from_address_t(remote_addr);
+
         if (raw_mode == mode_icmp || raw_mode == mode_udp) {
             conn_info.state.client_current_state = client_handshake1;
 
@@ -168,10 +173,11 @@ int client_on_timer(conn_info_t &conn_info)  // for client. called when a timer 
         }
         conn_info.last_state_time = get_current_time();
         conn_info.last_hb_sent_time = 0;
+
         // dont return;
     }
-    if (conn_info.state.client_current_state == client_tcp_handshake)  // send and resend syn
-    {
+    if (conn_info.state.client_current_state == client_tcp_handshake) {
+        // send and resend syn
         assert(raw_mode == mode_faketcp);
         if (get_current_time() - conn_info.last_state_time > client_handshake_timeout) {
             conn_info.state.client_current_state = client_idle;
@@ -198,7 +204,6 @@ int client_on_timer(conn_info_t &conn_info)  // for client. called when a timer 
         } else {
             return 0;
         }
-        return 0;
     } else if (conn_info.state.client_current_state == client_tcp_handshake_dummy) {
         assert(raw_mode == mode_faketcp);
         if (get_current_time() - conn_info.last_state_time > client_handshake_timeout) {
@@ -206,8 +211,8 @@ int client_on_timer(conn_info_t &conn_info)  // for client. called when a timer 
             mylog(log_info, "state back to client_idle from client_tcp_handshake_dummy\n");
             return 0;
         }
-    } else if (conn_info.state.client_current_state == client_handshake1)  // send and resend handshake1
-    {
+    } else if (conn_info.state.client_current_state == client_handshake1) {
+        // send and resend handshake1
         if (get_current_time() - conn_info.last_state_time > client_handshake_timeout) {
             conn_info.state.client_current_state = client_idle;
             mylog(log_info, "state back to client_idle from client_handshake1\n");
@@ -309,6 +314,7 @@ int client_on_timer(conn_info_t &conn_info)  // for client. called when a timer 
     }
     return 0;
 }
+
 int client_on_raw_recv_hs2_or_ready(conn_info_t &conn_info, char type, char *data, int data_len) {
     packet_info_t &send_info = conn_info.raw_info.send_info;
     packet_info_t &recv_info = conn_info.raw_info.recv_info;
@@ -369,7 +375,9 @@ int client_on_raw_recv_hs2_or_ready(conn_info_t &conn_info, char type, char *dat
     }
     return 0;
 }
-int client_on_raw_recv(conn_info_t &conn_info)  // called when raw fd received a packet.
+
+// called when raw fd received a packet.
+int client_on_raw_recv(conn_info_t &conn_info)
 {
     char *data;
     int data_len;
@@ -498,6 +506,7 @@ int client_on_raw_recv(conn_info_t &conn_info)  // called when raw fd received a
     }
     return 0;
 }
+
 int client_on_udp_recv(conn_info_t &conn_info) {
     int recv_len;
     char buf[buf_len];
@@ -546,11 +555,13 @@ void udp_accept_cb(struct ev_loop *loop, struct ev_io *watcher, int revents) {
     conn_info_t &conn_info = *((conn_info_t *)watcher->data);
     client_on_udp_recv(conn_info);
 }
+
 void raw_recv_cb(struct ev_loop *loop, struct ev_io *watcher, int revents) {
     if (is_udp2raw_mp) assert(0 == 1);
     conn_info_t &conn_info = *((conn_info_t *)watcher->data);
     client_on_raw_recv(conn_info);
 }
+
 #ifdef UDP2RAW_MP
 void async_cb(struct ev_loop *loop, struct ev_async *watcher, int revents) {
     conn_info_t &conn_info = *((conn_info_t *)watcher->data);
@@ -614,6 +625,7 @@ void clear_timer_cb(struct ev_loop *loop, struct ev_timer *watcher, int revents)
     conn_info_t &conn_info = *((conn_info_t *)watcher->data);
     client_on_timer(conn_info);
 }
+
 void fifo_cb(struct ev_loop *loop, struct ev_io *watcher, int revents) {
     conn_info_t &conn_info = *((conn_info_t *)watcher->data);
 
@@ -637,6 +649,7 @@ void fifo_cb(struct ev_loop *loop, struct ev_io *watcher, int revents) {
         mylog(log_info, "unknown command\n");
     }
 }
+
 int client_event_loop() {
     char buf[buf_len];
 
